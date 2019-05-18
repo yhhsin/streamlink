@@ -83,6 +83,8 @@ class Streamlink(object):
             "stream-segment-attempts": 3,
             "stream-segment-threads": 1,
             "stream-segment-timeout": 10.0,
+            "stream-segment-extra-info-path": None,
+            "stream-segment-checksum-path": None,
             "stream-timeout": 60.0,
             "subprocess-errorlog": False,
             "subprocess-errorlog-path": None,

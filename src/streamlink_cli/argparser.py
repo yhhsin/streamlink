@@ -1002,6 +1002,20 @@ def build_parser():
         Default is 10.0.
         """)
     transport.add_argument(
+        "--stream-segment-extra-info-path",
+        type=str,
+        metavar="PATH",
+        help="""
+        Log extra info of each segment.
+        """)
+    transport.add_argument(
+        "--stream-segment-checksum-path",
+        type=str,
+        metavar="PATH",
+        help="""
+        Log checksum of whole stream.
+        """)
+    transport.add_argument(
         "--stream-timeout",
         type=num(float, min=0),
         metavar="TIMEOUT",
