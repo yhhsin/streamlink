@@ -4,6 +4,7 @@ from concurrent import futures
 from concurrent.futures.thread import ThreadPoolExecutor
 from sys import version_info
 from threading import Event, Thread
+import hashlib
 
 from streamlink.buffers import RingBuffer
 from streamlink.stream.stream import StreamIO
@@ -98,7 +99,64 @@ class SegmentedStreamWriter(Thread):
     and finally writing the data to the buffer.
     """
 
-    def __init__(self, reader, size=20, retries=None, threads=None, timeout=None):
+    class MetaInfo(object):
+        def __init__(self, path, buffering=None):
+            self.file = open(path, "w", buffering=buffering)
+            self.init()
+
+        def init(self):
+            """
+            Extra inits
+            """
+            pass
+
+        def close(self):
+            self.file.close()
+
+        def write(self, chunk):
+            """
+            Write chunk
+            """
+            pass
+
+    class Info(MetaInfo):
+        def init(self):
+            self.segment_checksum = hashlib.md5()
+            self.segment_size = 0
+
+        def write(self, chunk):
+            self.segment_checksum.update(chunk)
+            self.segment_size += len(chunk)
+
+        def segment_end(self, chunk_filename):
+            self.file.write("{filename} {checksum} {length}\n".format(
+                filename=chunk_filename,
+                checksum="MD5=" + self.segment_checksum.hexdigest(),
+                length=self.segment_size,
+            ))
+            self.init()
+
+    class Checksum(MetaInfo):
+        algorithms = ["md5", "sha256"]
+
+        def init(self):
+            self.checksums = [(algorithm, getattr(hashlib, algorithm)()) for algorithm in self.algorithms]
+
+        def write(self, chunk):
+            for algorithm, sumer in self.checksums:
+                sumer.update(chunk)
+
+        def close(self, filename=None):
+            for algorithm, sumer in self.checksums:
+                self.file.write("{algorithm} ({filename}) = {digest}\n".format(
+                    algorithm=algorithm,
+                    filename=filename,
+                    digest=sumer.hexdigest(),
+                ))
+            super(SegmentedStreamWriter.Checksum, self).close()
+
+
+    def __init__(self, reader, size=20, retries=None, threads=None, timeout=None, extra_info_path=None, checksum_path=None):
         self.closed = False
         self.reader = reader
         self.stream = reader.stream
@@ -113,10 +171,22 @@ class SegmentedStreamWriter(Thread):
         if not timeout:
             timeout = self.session.options.get("stream-segment-timeout")
 
+        if not extra_info_path:
+            extra_info_path = self.session.options.get("stream-segment-extra-info-path")
+
+        if not checksum_path:
+            checksum_path = self.session.options.get("stream-segment-checksum-path")
+
         self.retries = retries
         self.timeout = timeout
         self.executor = CompatThreadPoolExecutor(max_workers=threads)
         self.futures = queue.Queue(size)
+        self.info = None
+        if extra_info_path:
+            self.info = SegmentedStreamWriter.Info(extra_info_path, buffering=1)
+        self.checksum = None
+        if checksum_path:
+            self.checksum = SegmentedStreamWriter.Checksum(checksum_path, buffering=1)
 
         Thread.__init__(self, name="Thread-{0}".format(self.__class__.__name__))
         self.daemon = True
@@ -129,6 +199,14 @@ class SegmentedStreamWriter(Thread):
         self.closed = True
         self.reader.buffer.close()
         self.executor.shutdown(wait=True, cancel_futures=True)
+
+        if self.info:
+            self.info.close()
+            self.info = None
+
+        if self.checksum:
+            self.checksum.close()
+            self.checksum = None
 
     def put(self, segment):
         """Adds a segment to the download pool and write queue."""

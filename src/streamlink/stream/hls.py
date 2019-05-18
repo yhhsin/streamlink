@@ -76,11 +76,19 @@ class HLSStreamWriter(SegmentedStreamWriter):
             key_uri = key.uri
 
         if self.key_uri != key_uri:
-            res = self.session.http.get(key_uri, exception=StreamError,
-                                        retries=self.retries,
-                                        **self.reader.request_params)
-            res.encoding = "binary/octet-stream"
-            self.key_data = res.content
+            log.debug("Fetching key {0}".format(key_uri))
+            m = re.match(r"^file://(?P<path>.*)", key_uri)
+            if m:
+                # file://
+                with open(m.group("path"), "rb") as f:
+                    self.key_data = f.read()
+            else:
+                # https?://
+                res = self.session.http.get(key_uri, exception=StreamError,
+                                            retries=self.retries,
+                                            **self.reader.request_params)
+                res.encoding = "binary/octet-stream"
+                self.key_data = res.content
             self.key_uri = key_uri
 
         iv = key.iv or num_to_iv(sequence)
@@ -144,6 +152,17 @@ class HLSStreamWriter(SegmentedStreamWriter):
             log.info("Filtering out segments and pausing stream output")
             self.reader.filter_event.clear()
 
+    def _write_chunk(self, chunk):
+        self.reader.buffer.write(chunk)
+        if self.info:
+            self.info.write(chunk)
+        if self.checksum:
+            self.checksum.write(chunk)
+
+    def _segment_end(self, sequence):
+        if self.info:
+            self.info.segment_end(sequence.segment.uri)
+
     def _write(self, sequence, res, chunk_size=8192):
         if sequence.segment.key and sequence.segment.key.method != "NONE":
             try:
@@ -163,15 +182,17 @@ class HLSStreamWriter(SegmentedStreamWriter):
             else:
                 decrypted_chunk = decryptor.decrypt(data)
 
-            self.reader.buffer.write(pkcs7_decode(decrypted_chunk))
+            result_chunk = pkcs7_decode(decrypted_chunk)
+            self._write_chunk(pkcs7_decode(decrypted_chunk))
         else:
             try:
                 for chunk in res.iter_content(chunk_size):
-                    self.reader.buffer.write(chunk)
+                    self._write_chunk(chunk)
             except ChunkedEncodingError:
                 log.error(f"Download of segment {sequence.num} failed")
 
                 return
+        self._segment_end(sequence)
 
         log.debug(f"Download of segment {sequence.num} complete")
 
