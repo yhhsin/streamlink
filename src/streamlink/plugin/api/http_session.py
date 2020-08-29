@@ -1,3 +1,4 @@
+import logging
 import time
 from requests import Session, __build__ as requests_version
 from requests.adapters import HTTPAdapter
@@ -25,6 +26,9 @@ from ...exceptions import PluginError
 from ...utils import parse_json, parse_xml
 
 __all__ = ["HTTPSession"]
+
+
+log = logging.getLogger(__name__)
 
 
 def _parse_keyvalue_list(val):
@@ -149,8 +153,8 @@ class HTTPSession(Session):
         session = kwargs.pop("session", None)
         timeout = kwargs.pop("timeout", self.timeout)
         total_retries = kwargs.pop("retries", 0)
-        retry_backoff = kwargs.pop("retry_backoff", 0.3)
-        retry_max_backoff = kwargs.pop("retry_max_backoff", 10.0)
+        retry_backoff = kwargs.pop("retry_backoff", 1.0)
+        retry_max_backoff = kwargs.pop("retry_max_backoff", 2.0)
         retries = 0
 
         if session:
@@ -171,6 +175,7 @@ class HTTPSession(Session):
             except KeyboardInterrupt:
                 raise
             except Exception as rerr:
+                log.debug("Failed to open URL: {url} ({err})".format(url=url, err=rerr))
                 if retries >= total_retries:
                     err = exception("Unable to open URL: {url} ({err})".format(url=url,
                                                                                err=rerr))
@@ -180,6 +185,7 @@ class HTTPSession(Session):
                 # back off retrying, but only to a maximum sleep time
                 delay = min(retry_max_backoff,
                             retry_backoff * (2 ** (retries - 1)))
+                log.debug("Retry in {delay} seconds".format(delay=delay))
                 time.sleep(delay)
 
         if schema:
