@@ -6,6 +6,7 @@ from threading import Event
 from urllib.parse import urlparse
 
 from Crypto.Cipher import AES
+from requests import Response
 from requests.exceptions import ChunkedEncodingError
 
 from streamlink.exceptions import StreamError
@@ -117,6 +118,14 @@ class HLSStreamWriter(SegmentedStreamWriter):
         return request_params
 
     def fetch(self, sequence, retries=None):
+        result = self._fetch(sequence, retries=retries)
+        if isinstance(result, Response):
+            log.debug("segment {0}: result: status_code = {1}".format(sequence.num, result.status_code))
+        else:
+            log.debug("segment {0}: result: {1}".format(sequence.num, result))
+        return result
+
+    def _fetch(self, sequence, retries=None):
         if self.closed or not retries:
             return
 
