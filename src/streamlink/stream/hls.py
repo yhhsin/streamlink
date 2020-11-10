@@ -4,6 +4,7 @@ import struct
 
 from collections import defaultdict, namedtuple
 from Crypto.Cipher import AES
+from requests import Response
 from requests.exceptions import ChunkedEncodingError
 
 from streamlink.compat import urlparse, str
@@ -121,6 +122,14 @@ class HLSStreamWriter(SegmentedStreamWriter):
         return request_params
 
     def fetch(self, sequence, retries=None):
+        result = self._fetch(sequence, retries=retries)
+        if isinstance(result, Response):
+            log.debug("segment {0}: result: status_code = {1}".format(sequence.num, result.status_code))
+        else:
+            log.debug("segment {0}: result: {1}".format(sequence.num, result))
+        return result
+
+    def _fetch(self, sequence, retries=None):
         if self.closed or not retries:
             return
 
