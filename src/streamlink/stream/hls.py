@@ -173,7 +173,6 @@ class HLSStreamWriter(SegmentedStreamWriter):
             else:
                 decrypted_chunk = decryptor.decrypt(data)
 
-            result_chunk = pkcs7_decode(decrypted_chunk)
             self._write_chunk(pkcs7_decode(decrypted_chunk))
         else:
             try:
