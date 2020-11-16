@@ -13,6 +13,7 @@ deps = [
     "requests>=2.21.0,<3.0",
     "isodate",
     "websocket-client>=0.58.0",
+    "eventlet",
     # Support for SOCKS proxies
     "PySocks!=1.5.7,>=1.5.6",
 ]
