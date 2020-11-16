@@ -6,6 +6,7 @@ import platform
 from collections import OrderedDict
 from gettext import gettext
 
+import eventlet
 import requests
 import sys
 import signal
@@ -35,6 +36,9 @@ from .console import ConsoleOutput, ConsoleUserInputRequester
 from .constants import CONFIG_FILES, PLUGINS_DIR, STREAM_SYNONYMS, DEFAULT_STREAM_METADATA
 from .output import FileOutput, PlayerOutput
 from .utils import NamedPipe, HTTPServer, ignored, progress, stream_to_url
+
+# Must be as early as possible
+eventlet.monkey_patch(socket=True, thread=True)
 
 ACCEPTABLE_ERRNO = (errno.EPIPE, errno.EINVAL, errno.ECONNRESET)
 try:

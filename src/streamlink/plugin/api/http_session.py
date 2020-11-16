@@ -1,5 +1,6 @@
 import logging
 import time
+import eventlet
 from requests import Session, __build__ as requests_version
 from requests.adapters import HTTPAdapter
 
@@ -163,18 +164,19 @@ class HTTPSession(Session):
 
         while True:
             try:
-                res = Session.request(self, method, url,
-                                      headers=headers,
-                                      params=params,
-                                      timeout=timeout,
-                                      proxies=proxies,
-                                      *args, **kwargs)
+                with eventlet.Timeout(timeout):
+                    res = Session.request(self, method, url,
+                                          headers=headers,
+                                          params=params,
+                                          timeout=timeout,
+                                          proxies=proxies,
+                                          *args, **kwargs)
                 if raise_for_status and res.status_code not in acceptable_status:
                     res.raise_for_status()
                 break
             except KeyboardInterrupt:
                 raise
-            except Exception as rerr:
+            except (Exception, eventlet.Timeout) as rerr:
                 log.debug("Failed to open URL: {url} ({err})".format(url=url, err=rerr))
                 if retries >= total_retries:
                     err = exception("Unable to open URL: {url} ({err})".format(url=url,
