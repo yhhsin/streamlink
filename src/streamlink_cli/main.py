@@ -33,7 +33,7 @@ from streamlink_cli.output import FileOutput, PlayerOutput
 from streamlink_cli.utils import HTTPServer, ignored, progress, stream_to_url
 
 # Must be as early as possible
-eventlet.monkey_patch(socket=True, thread=True)
+eventlet.monkey_patch(thread=True)
 
 ACCEPTABLE_ERRNO = (errno.EPIPE, errno.EINVAL, errno.ECONNRESET)
 try:
