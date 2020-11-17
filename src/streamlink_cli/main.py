@@ -38,7 +38,7 @@ from .output import FileOutput, PlayerOutput
 from .utils import NamedPipe, HTTPServer, ignored, progress, stream_to_url
 
 # Must be as early as possible
-eventlet.monkey_patch(socket=True, thread=True)
+eventlet.monkey_patch(thread=True)
 
 ACCEPTABLE_ERRNO = (errno.EPIPE, errno.EINVAL, errno.ECONNRESET)
 try:
