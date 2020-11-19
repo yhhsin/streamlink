@@ -4,6 +4,8 @@ import logging
 import os
 import platform
 import eventlet
+# Must be as early as possible
+eventlet.monkey_patch(socket=True, thread=True)
 import signal
 import sys
 from collections import OrderedDict
@@ -31,9 +33,6 @@ from streamlink_cli.console import ConsoleOutput, ConsoleUserInputRequester
 from streamlink_cli.constants import CONFIG_FILES, DEFAULT_STREAM_METADATA, PLUGINS_DIR, STREAM_SYNONYMS
 from streamlink_cli.output import FileOutput, PlayerOutput
 from streamlink_cli.utils import HTTPServer, ignored, progress, stream_to_url
-
-# Must be as early as possible
-eventlet.monkey_patch(thread=True)
 
 ACCEPTABLE_ERRNO = (errno.EPIPE, errno.EINVAL, errno.ECONNRESET)
 try:
