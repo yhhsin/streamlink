@@ -1015,7 +1015,7 @@ def setup_logging(stream=sys.stdout, level="info"):
         stream=stream,
         level=level,
         style="{",
-        format=("[{asctime}]" if level == "trace" else "") + "[{name}][{levelname}] {message}",
+        format=("[{asctime},{msecs:03.0f}]" if level == "trace" else "") + "[{name}][{levelname}] {message}",
         datefmt="%H:%M:%S" + (".%f" if level == "trace" else "")
     )
 
