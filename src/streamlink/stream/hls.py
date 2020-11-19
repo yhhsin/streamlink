@@ -266,6 +266,7 @@ class HLSStreamWorker(SegmentedStreamWorker):
         media_sequence = playlist.media_sequence or 0
         sequences = [Sequence(media_sequence + i, s)
                      for i, s in enumerate(playlist.segments)]
+        log.debug("sequences = {}".format(" ".join(["{:06d}".format(s.num) for s in sequences])))
 
         self.playlist_reload_time = self._playlist_reload_time(playlist, sequences)
 

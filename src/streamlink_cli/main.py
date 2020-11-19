@@ -7,6 +7,9 @@ from collections import OrderedDict
 from gettext import gettext
 
 import eventlet
+# Must be as early as possible
+eventlet.monkey_patch(socket=True, thread=True)
+
 import requests
 import sys
 import signal
@@ -36,9 +39,6 @@ from .console import ConsoleOutput, ConsoleUserInputRequester
 from .constants import CONFIG_FILES, PLUGINS_DIR, STREAM_SYNONYMS, DEFAULT_STREAM_METADATA
 from .output import FileOutput, PlayerOutput
 from .utils import NamedPipe, HTTPServer, ignored, progress, stream_to_url
-
-# Must be as early as possible
-eventlet.monkey_patch(thread=True)
 
 ACCEPTABLE_ERRNO = (errno.EPIPE, errno.EINVAL, errno.ECONNRESET)
 try:
@@ -970,10 +970,10 @@ def check_version(force=False):
 
 
 def setup_logging(stream=sys.stdout, level="info"):
-    fmt = ("[{asctime},{msecs:03.0f}]" if level == "trace" else "") + "[{name}][{levelname}] {message}"
+    fmt = ("[{asctime},{msecs:03.0f}]") + "[{name}][{levelname}] {message}"
     logger.basicConfig(stream=stream, level=level,
                        format=fmt, style="{",
-                       datefmt="%H:%M:%S")
+                       datefmt="%Y-%m-%d %H:%M:%S")
 
 
 def main():
