@@ -4,6 +4,7 @@ import struct
 from collections import OrderedDict, defaultdict, namedtuple
 from threading import Event
 from urllib.parse import urlparse
+import time
 
 from Crypto.Cipher import AES
 from requests import Response
@@ -227,6 +228,7 @@ class HLSStreamWorker(SegmentedStreamWorker):
             self.playlist_reload_time_override = float(self.playlist_reload_time_override)
         elif self.playlist_reload_time_override not in ["segment", "live-edge"]:
             self.playlist_reload_time_override = 0
+        self.last_playlist_loading = None
 
         self.reload_playlist()
 
@@ -255,11 +257,17 @@ class HLSStreamWorker(SegmentedStreamWorker):
             return
 
         self.reader.buffer.wait_free()
-        log.debug("Reloading playlist")
+        if self.last_playlist_loading:
+            delta = time.time() - self.last_playlist_loading
+            delta_str = ", delta = {:.3f}".format(delta)
+        else:
+            delta_str = ""
+        log.debug("Reloading playlist{}".format(delta_str))
         res = self.session.http.get(self.stream.url,
                                     exception=StreamError,
                                     retries=self.playlist_reload_retries,
                                     **self.reader.request_params)
+        self.last_playlist_loading = time.time()
         try:
             playlist = self._reload_playlist(res.text, res.url)
         except ValueError as err:
