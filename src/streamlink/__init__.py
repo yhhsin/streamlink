@@ -20,7 +20,7 @@ __credits__ = ["https://github.com/streamlink/streamlink/blob/master/AUTHORS"]
 
 import eventlet
 # Must be as early as possible
-eventlet.monkey_patch(socket=True, thread=True)
+eventlet.monkey_patch(socket=True, thread=True, os=True, select=True, time=True)
 
 from streamlink.api import streams
 from streamlink.exceptions import (StreamlinkError, PluginError, NoStreamsError,
