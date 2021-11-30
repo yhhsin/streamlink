@@ -1,15 +1,23 @@
 import os
+import time
+import io
+import sys
 import unittest
 from unittest.mock import Mock, patch
 
 import pytest
 import requests_mock
+import requests
 from Crypto.Cipher import AES
+from urllib.parse import urljoin
+import random
 
+import streamlink.logger as logger
 from streamlink.session import Streamlink
 from streamlink.stream import hls
 from tests.mixins.stream_hls import Playlist, Segment, Tag, TestMixinStreamHLS
 from tests.resources import text
+from .util_slow_http_server import RunSlowHTTPServer
 
 
 def pkcs7_encode(data, keySize):
@@ -88,6 +96,82 @@ class TestHLSVariantPlaylist(unittest.TestCase):
             all([isinstance(stream, hls.HLSStream) for stream in streams.values()]),
             "Returns HLSStream instances"
         )
+
+class TestSlowHLSStreamBase(unittest.TestCase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.host = "127.0.0.1"
+        self.port = 53153
+
+    def setUp(self):
+        super().setUp()
+        print("{}:{}".format(self.host, self.port))
+        self.run_server = RunSlowHTTPServer(self.host, self.port)
+        self.server_thread = self.run_server.run_threaded()
+        print("setup")
+
+    def tearDown(self):
+        super().tearDown()
+        self.run_server.shutdown()
+        self.server_thread.join(timeout=3)
+        print("teardown")
+#        raise Exception()
+
+    def get_url(self, path, query=""):
+        return urljoin("http://{host}:{port}/".format(host=self.host, port=self.port), path + "?" + query)
+
+class TestSlowHLSStreamBasic(TestSlowHLSStreamBase):
+    def test_basic_00_normal(self):
+        resp = requests.get(self.get_url("/blah"))
+        self.assertEqual("Content: /blah\n", resp.content.decode("utf-8"))
+
+    def test_basic_01_no_read_timeout(self):
+        resp = requests.get(self.get_url("/blah", "interval=2&chunk_size=10"), timeout=3)
+
+    def test_basic_02_read_timeout(self):
+        with self.assertRaises(requests.exceptions.ConnectionError):
+            resp = requests.get(self.get_url("/blah", "interval=5&chunk_size=10"), timeout=3)
+
+class TestSlowHLSStream(TestSlowHLSStreamBase):
+    def test_prepare(self):
+        logger.basicConfig(
+            stream=sys.stdout,
+            level="trace",
+            style="{",
+            format=("[{asctime},{msecs:03.0f}]") + "[{name}][{levelname}] {message}",
+            datefmt="%H:%M:%S" + ".%f"
+        )
+        segments = []
+        segment_template = "#EXT-X-PROGRAM-DATE-TIME:2000-01-01T00:00:00.000Z\n#EXTINF:15.000,live\n{}"
+        segments.append(segment_template.format(self.get_url("segment_01.ts", "")))
+        segments.append(segment_template.format(self.get_url("segment_02.ts", "interval=2&chunk_size=5&length=15")))
+#        r = requests.get(segments[0])
+#        print("r: {}".format(r.content))
+        with text("hls/test_template_slow.m3u8") as f:
+            self.template = f.read()
+        playlist = self.template.format(segments="\n".join(segments))
+        print("playlist: {}".format(playlist))
+        playlist_url = "http://mocked/playlist.m3u8"
+
+        with requests_mock.Mocker(real_http=True) as mock:
+            mock.get(playlist_url, text=playlist)
+            session = Streamlink(options={
+                "hls-segment-attempts": 1,
+                "hls-segment-threads": 1,
+                "hls-segment-timeout": 3,
+                "loglevel": "trace",
+            })
+            stream = hls.HLSStream(session, playlist_url)
+            content = bytes([])
+            with stream.open() as f:
+                while True:
+                    buf = f.read(1024)
+                    if not buf:
+                        break
+                    content += buf
+            print("content: {}".format(content))
+#                pass
+#        raise Exception()
 
 
 @patch("streamlink.stream.hls.HLSStreamWorker.wait", Mock(return_value=True))
