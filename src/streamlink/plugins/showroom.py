@@ -28,28 +28,27 @@ class ShowroomHLSStream(HLSStream):
 
 
 @pluginmatcher(re.compile(
-    r"https?://(?:\w+\.)?showroom-live\.com/"
+    r"https?://(?:\w+\.)?showroom-live\.com/r/(?P<room_url_key>[^/?]+)"
 ))
 class Showroom(Plugin):
     def _get_streams(self):
+        room_url_key = self.match.groupdict().get("room_url_key")
         data = self.session.http.get(
-            self.url,
+            "https://www.showroom-live.com/api/room/status",
+            params={"room_url_key": room_url_key},
             schema=validate.Schema(
-                validate.parse_html(),
-                validate.xml_xpath_string(".//script[@id='js-live-data'][@data-json]/@data-json"),
-                validate.any(None, validate.all(
-                    validate.parse_json(),
-                    {"is_live": int,
-                     "room_id": int,
-                     validate.optional("room"): {"content_region_permission": int, "is_free": int}},
-                ))
-            )
+                validate.parse_json(),
+                {
+                    "is_live": bool,
+                    "room_id": int,
+                }
+            ),
         )
         if not data:  # URL without livestream
             return
 
         log.debug(f"{data!r}")
-        if data["is_live"] != 1:
+        if not data["is_live"]:
             log.info("This stream is currently offline")
             return
 
