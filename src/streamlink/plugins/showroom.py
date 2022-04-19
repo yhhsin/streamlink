@@ -28,11 +28,23 @@ class ShowroomHLSStream(HLSStream):
 
 
 @pluginmatcher(re.compile(
-    r"https?://(?:\w+\.)?showroom-live\.com/r/(?P<room_url_key>[^/?]+)"
+    r"https?://(?:\w+\.)?showroom-live\.com/"
 ))
 class Showroom(Plugin):
     def _get_streams(self):
-        room_url_key = self.match.groupdict().get("room_url_key")
+        re_room_url_key = re.compile(r"room_url_key:\"(?P<room_url_key>[^\"]+)\"")
+        room_url_key = self.session.http.get(
+            self.url,
+            schema=validate.Schema(
+                validate.parse_html(),
+                validate.xml_xpath_string(".//script[contains(text(),',room_url_key:\"')][1]/text()"),
+                validate.any(None, validate.all(
+                    validate.transform(re_room_url_key.search),
+                    validate.any(None, validate.get("room_url_key")),
+                )),
+            ),
+        )
+        log.debug(f"{room_url_key!r}")
         data = self.session.http.get(
             "https://www.showroom-live.com/api/room/status",
             params={"room_url_key": room_url_key},
