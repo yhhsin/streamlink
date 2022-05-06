@@ -62,6 +62,8 @@ class Streamlink:
             "stream-segment-attempts": 3,
             "stream-segment-threads": 1,
             "stream-segment-timeout": 10.0,
+            "stream-segment-extra-info-path": None,
+            "stream-segment-checksum-path": None,
             "stream-timeout": 60.0,
             "ffmpeg-ffmpeg": None,
             "ffmpeg-fout": None,

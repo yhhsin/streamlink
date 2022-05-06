@@ -806,6 +806,10 @@ def setup_options():
         streamlink.set_option("stream-segment-threads", args.stream_segment_threads)
     if args.stream_segment_timeout:
         streamlink.set_option("stream-segment-timeout", args.stream_segment_timeout)
+    if args.stream_segment_extra_info_path:
+        streamlink.set_option("stream-segment-extra-info-path", args.stream_segment_extra_info_path)
+    if args.stream_segment_checksum_path:
+        streamlink.set_option("stream-segment-checksum-path", args.stream_segment_checksum_path)
     if args.stream_timeout:
         streamlink.set_option("stream-timeout", args.stream_timeout)
 
