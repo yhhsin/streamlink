@@ -215,6 +215,17 @@ class HLSStreamWriter(SegmentedStreamWriter):
         except (ChunkedEncodingError, ContentDecodingError, ConnectionError, StreamConsumedError):
             pass
 
+    def _write_chunk(self, chunk):
+        self.reader.buffer.write(chunk)
+        if self.extra_info:
+            self.extra_info.write(chunk)
+        if self.checksum:
+            self.checksum.write(chunk)
+
+    def _segment_end(self, sequence):
+        if self.extra_info:
+            self.extra_info.segment_end(sequence.segment.uri)
+
     def _write(self, sequence: Sequence, res: Response, is_map: bool):
         if sequence.segment.key and sequence.segment.key.method != "NONE":
             try:
@@ -234,14 +245,15 @@ class HLSStreamWriter(SegmentedStreamWriter):
                 decrypted_chunk = decryptor.decrypt(data)
 
             chunk = unpad(decrypted_chunk, AES.block_size, style="pkcs7")
-            self.reader.buffer.write(chunk)
+            self._write_chunk(chunk)
         else:
             try:
                 for chunk in res.iter_content(self.WRITE_CHUNK_SIZE):
-                    self.reader.buffer.write(chunk)
+                    self._write_chunk(chunk)
             except (ChunkedEncodingError, ContentDecodingError, ConnectionError) as err:
                 log.error(f"Download of segment {sequence.num} failed ({err})")
                 return
+        self._segment_end(sequence)
 
         if is_map:
             log.debug(f"Segment initialization {sequence.num} complete")

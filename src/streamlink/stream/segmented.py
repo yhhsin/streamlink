@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import queue
 from concurrent import futures
@@ -91,6 +92,65 @@ class SegmentedStreamWorker(Thread):
         self.close()
 
 
+class MetaInfo(object):
+    def __init__(self, path, buffering=None):
+        self.file = open(path, "w", buffering=buffering)
+        self.init()
+
+    def init(self):
+        """
+        Extra inits
+        """
+        pass
+
+    def close(self):
+        self.file.close()
+
+    def write(self, chunk):
+        """
+        Write chunk
+        """
+        pass
+
+
+class Info(MetaInfo):
+    def init(self):
+        self.segment_checksum = hashlib.md5()
+        self.segment_size = 0
+
+    def write(self, chunk):
+        self.segment_checksum.update(chunk)
+        self.segment_size += len(chunk)
+
+    def segment_end(self, chunk_filename):
+        self.file.write("{filename} {checksum} {length}\n".format(
+            filename=chunk_filename,
+            checksum="MD5=" + self.segment_checksum.hexdigest(),
+            length=self.segment_size,
+        ))
+        self.init()
+
+
+class Checksum(MetaInfo):
+    algorithms = ["md5", "sha256"]
+
+    def init(self):
+        self.checksums = [(algorithm, getattr(hashlib, algorithm)()) for algorithm in self.algorithms]
+
+    def write(self, chunk):
+        for algorithm, checksummer in self.checksums:
+            checksummer.update(chunk)
+
+    def close(self, filename=None):
+        for algorithm, checksummer in self.checksums:
+            self.file.write("{algorithm} ({filename}) = {digest}\n".format(
+                algorithm=algorithm,
+                filename=filename,
+                digest=checksummer.hexdigest(),
+            ))
+        super().close()
+
+
 class SegmentedStreamWriter(Thread):
     """The writer thread.
 
@@ -118,6 +178,16 @@ class SegmentedStreamWriter(Thread):
         self.threads = threads
         self.executor = CompatThreadPoolExecutor(max_workers=self.threads)
         self.futures = queue.Queue(size)
+        self.extra_info = None
+        extra_info_path = self.session.options.get("stream-segment-extra-info-path")
+        if extra_info_path:
+            log.debug(f"Writing extra info to {extra_info_path}")
+            self.extra_info = Info(extra_info_path, buffering=1)
+        self.checksum = None
+        checksum_path = self.session.options.get("stream-segment-checksum-path")
+        if checksum_path:
+            log.debug(f"Writing checksum to {checksum_path}")
+            self.checksum = Checksum(checksum_path, buffering=1)
 
         super().__init__(daemon=True, name=f"Thread-{self.__class__.__name__}")
 
@@ -131,6 +201,14 @@ class SegmentedStreamWriter(Thread):
         self.closed = True
         self.reader.close()
         self.executor.shutdown(wait=True, cancel_futures=True)
+
+        if self.extra_info:
+            self.extra_info.close()
+            self.extra_info = None
+
+        if self.checksum:
+            self.checksum.close()
+            self.checksum = None
 
     def put(self, segment):
         """Adds a segment to the download pool and write queue."""
