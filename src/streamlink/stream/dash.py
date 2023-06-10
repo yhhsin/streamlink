@@ -65,8 +65,13 @@ class DASHStreamWriter(SegmentedStreamWriter):
                 log.warning(f"{self.reader.mime_type} segment {segment.name}: aborted")
                 return
             self.reader.buffer.write(chunk)
+            for meta_stream in self.meta_streams:
+                meta_stream.write(chunk)
 
         log.debug(f"{self.reader.mime_type} segment {segment.name}: completed")
+
+        for meta_stream in self.meta_streams:
+            meta_stream.segment_end(segment.url)
 
 
 class DASHStreamWorker(SegmentedStreamWorker):

@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import queue
 from concurrent import futures
@@ -11,6 +12,55 @@ from streamlink.stream.stream import Stream, StreamIO
 
 
 log = logging.getLogger(__name__)
+
+
+class MetaStream(object):
+    def close(self):
+        """
+        Close stream
+        """
+        pass
+
+    def write(self, chunk):
+        """
+        Write chunk
+        """
+        pass
+
+    def segment_end(self, sequence):
+        """
+        Called upon end of segment
+        """
+        pass
+
+
+class MetaStreamWithOutput(object):
+    def __init__(self, path, buffering=None):
+        super().__init__()
+        self.file = open(path, "w", buffering=buffering)
+
+    def close(self):
+        self.file.close()
+
+
+class ExtraInfoStream(MetaStreamWithOutput):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.reset_segment_state()
+
+    def reset_segment_state(self):
+        self.segment_checksum = hashlib.md5()
+        self.segment_size = 0
+
+    def write(self, chunk):
+        self.segment_checksum.update(chunk)
+        self.segment_size += len(chunk)
+
+    def segment_end(self, segment_id):
+        checksum="MD5=" + self.segment_checksum.hexdigest()
+        length=self.segment_size
+        self.file.write(f"{segment_id} {checksum} {length}\n")
+        self.reset_segment_state()
 
 
 class CompatThreadPoolExecutor(ThreadPoolExecutor):
@@ -142,6 +192,9 @@ class SegmentedStreamWriter(AwaitableMixin, Thread):
 
         self.reader.close()
         self.executor.shutdown(wait=True, cancel_futures=True)
+
+        for meta_stream in self.meta_streams:
+            meta_stream.close()
 
     def put(self, segment):
         """Adds a segment to the download pool and write queue."""

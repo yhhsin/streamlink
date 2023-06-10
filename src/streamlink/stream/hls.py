@@ -219,6 +219,10 @@ class HLSStreamWriter(SegmentedStreamWriter):
             try:
                 return self._write(sequence, result, *data)
             finally:
+                # segment end
+                for meta_stream in self.meta_streams:
+                    meta_stream.segment_end(sequence.segment.uri)
+
                 is_paused = self.reader.is_paused()
 
                 # Depending on the filtering implementation, the segment's discontinuity attribute can be missing.
@@ -245,6 +249,11 @@ class HLSStreamWriter(SegmentedStreamWriter):
                 log.info("Filtering out segments and pausing stream output")
                 self.reader.pause()
 
+    def _write_chunk(self, chunk):
+        self.reader.buffer.write(chunk)
+        for meta_stream in self.meta_streams:
+            meta_stream.write(chunk)
+
     def _write(self, sequence: Sequence, result: Response, is_map: bool):
         if sequence.segment.key and sequence.segment.key.method != "NONE":
             try:
@@ -262,7 +271,7 @@ class HLSStreamWriter(SegmentedStreamWriter):
                 encrypted_chunk = result.content
                 decrypted_chunk = decryptor.decrypt(encrypted_chunk)
                 chunk = unpad(decrypted_chunk, AES.block_size, style="pkcs7")
-                self.reader.buffer.write(chunk)
+                self._write_chunk(chunk)
             except (ChunkedEncodingError, ContentDecodingError, ConnectionError) as err:
                 log.error(f"Download of segment {sequence.num} failed: {err}")
                 return
@@ -273,7 +282,7 @@ class HLSStreamWriter(SegmentedStreamWriter):
         else:
             try:
                 for chunk in result.iter_content(self.WRITE_CHUNK_SIZE):
-                    self.reader.buffer.write(chunk)
+                    self._write_chunk(chunk)
             except (ChunkedEncodingError, ContentDecodingError, ConnectionError) as err:
                 log.error(f"Download of segment {sequence.num} failed: {err}")
                 return
