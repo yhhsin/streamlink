@@ -879,6 +879,14 @@ def build_parser():
         """,
     )
     transport.add_argument(
+        "--stream-segment-extra-info",
+        type=str,
+        metavar="FILENAME",
+        help="""
+        Write extra info of stream segments to `FILENAME`.
+        """,
+    )
+    transport.add_argument(
         "--stream-timeout",
         type=num(float, gt=0),
         metavar="TIMEOUT",
@@ -1369,6 +1377,7 @@ _ARGUMENT_TO_SESSIONOPTION: List[Tuple[str, str, Optional[Callable[[Any], Any]]]
     ("stream_segment_attempts", "stream-segment-attempts", None),
     ("stream_segment_threads", "stream-segment-threads", None),
     ("stream_segment_timeout", "stream-segment-timeout", None),
+    ("stream_segment_extra_info", "stream-segment-extra-info", None),
     ("stream_timeout", "stream-timeout", None),
     ("hls_live_edge", "hls-live-edge", None),
     ("hls_live_restart", "hls-live-restart", None),

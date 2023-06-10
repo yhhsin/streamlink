@@ -234,6 +234,7 @@ class Streamlink:
             "stream-segment-attempts": 3,
             "stream-segment-threads": 1,
             "stream-segment-timeout": 10.0,
+            "stream-segment-extra-info": None,
             "stream-timeout": 60.0,
             "hls-live-edge": 3,
             "hls-live-restart": False,
@@ -372,6 +373,10 @@ class Streamlink:
               - ``float``
               - ``10.0``
               - Segment connect and read timeout
+            * - stream-segment-extra-info
+              - ``str | None``
+              - ``None``
+              - Write extra info of stream segments at the specified path
             * - stream-timeout
               - ``float``
               - ``60.0``

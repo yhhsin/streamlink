@@ -179,6 +179,11 @@ class SegmentedStreamWriter(AwaitableMixin, Thread):
         self.threads = threads
         self.executor = CompatThreadPoolExecutor(max_workers=self.threads)
         self.futures: queue.Queue[Future] = queue.Queue(size)
+        self.meta_streams = []
+        extra_info = self.session.options.get("stream-segment-extra-info")
+        if extra_info:
+            log.debug(f"Writing extra info to {extra_info}")
+            self.meta_streams.append(ExtraInfoStream(extra_info, buffering=1))
 
     def close(self):
         """Shuts down the thread, its executor and closes the reader (worker thread and buffer)."""
