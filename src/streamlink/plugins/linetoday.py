@@ -24,51 +24,81 @@ class LineToday(Plugin):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-#        self.session.set_option("hls-playlist-reload-time", "segment")
+        self.session.set_option("hls-playlist-reload-time", "segment")
+
+    @staticmethod
+    def parse_simple_js_object(data):
+        result = {}
+        pattern = re.compile(r"\b(?P<key>\w+)\s*:\s*(?:(?P<dvalue>\d+)|\"(?P<svalue>[^\"]*)\")")
+        return {
+            m["key"]: int(m["dvalue"]) if m["dvalue"] is not None else m["svalue"] for m in re.finditer(pattern, data)
+        }
 
     def _get_streams(self):
-        broadcast_id = self.session.http.get(
+        script = self.session.http.get(
             self.url,
             schema=validate.Schema(
                 validate.parse_html(),
-                validate.xml_xpath_string("//script[contains(.,'broadcastId')][1]/text()"),
+                validate.xml_xpath_string("//script[contains(., 'shareProperties:{')][1]/text()"),
                 str,
-                validate.regex(re.compile(r'\bbroadcastId\s*:\s*"(?P<broadcastid>\w+)"')),
-                validate.get("broadcastid"),
             ),
         )
-        if not broadcast_id:
-            return
-        self.id = broadcast_id
 
-        log.debug(f"Broadcast ID: {broadcast_id}")
+        self.title = validate.Schema(
+            validate.regex(re.compile(r"\bshareProperties\s*:\s*{(?P<shareProperties>[^}]*)}")),
+            validate.get("shareProperties"),
+            validate.transform(LineToday.parse_simple_js_object),
+            validate.get("title"),
+            str,
+        ).validate(script)
+        log.debug(f"title: {self.title}")
 
-        broadcast_status, self.title, hls_urls = self.session.http.get(
-            f"https://today.line.me/webapi/glplive/broadcasts/{broadcast_id}",
-            headers={
-                "Referer": self.url,
-            },
-            schema=validate.Schema(
-                validate.parse_json(),
-                {
-                    "broadcastStatus": str,
-                    "title": str,
-                    "hlsUrls": dict,
+        media = validate.Schema(
+            validate.regex(re.compile(r"\bmedia\s*:\s*{(?P<media>[^}]*)}")),
+            validate.get("media"),
+            validate.transform(LineToday.parse_simple_js_object),
+            validate.union_get("type", "hash", "broadcastId"),
+        ).validate(script)
+        log.debug(f"media: {media}")
+
+        if media[0] == "obs":
+            log.debug(f"hash: {media[1]}")
+            url = f"https://obs.line-scdn.net/{media[1]}/abr.m3u8"
+            streams = HLSStream.parse_variant_playlist(
+                self.session,
+                url,
+                headers={"Referer": self.url},
+            )
+        elif media[0] == "live":
+            log.debug(f"broadcastId: {media[2]}")
+            broadcast_status, self.title, hls_urls = self.session.http.get(
+                f"https://today.line.me/webapi/glplive/broadcasts/{media[2]}",
+                headers={
+                    "Referer": self.url,
                 },
-                validate.union_get(
-                    "broadcastStatus",
-                    "title",
-                    "hlsUrls",
+                schema=validate.Schema(
+                    validate.parse_json(),
+                    {
+                        "broadcastStatus": str,
+                        "title": str,
+                        "hlsUrls": dict,
+                    },
+                    validate.union_get(
+                        "broadcastStatus",
+                        "title",
+                        "hlsUrls",
+                    ),
                 ),
-            ),
-        )
-        if broadcast_status != self.BROADCAST_STATUS:
-            log.info("This stream is currently offline")
+            )
+            if broadcast_status != self.BROADCAST_STATUS:
+                log.info("This stream is currently offline")
+                return
+            streams = {
+                f"{label}p" if label.isdigit() else label: HLSStream(self.session, url) for label, url in hls_urls.items()
+            }
+        else:
+            log.info(f"Unknown media type: {media[0]}")
             return
-
-        streams = {
-            f"{label}p" if label.isdigit() else label: HLSStream(self.session, url) for label, url in hls_urls.items()
-        }
 
         return streams
 
