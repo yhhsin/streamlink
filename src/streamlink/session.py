@@ -410,6 +410,10 @@ class Streamlink:
                 - ``segment``: duration of the last segment
                 - ``live-edge``: sum of segment durations of the ``hls-live-edge`` value minus one
                 - ``default``: the playlist's target duration
+            * - hls-playlist-no-new-segment-timeout-override
+              - ``float | None``
+              - ``None``
+              - Override the timeout for no new segment from playlist
             * - hls-segment-stream-data
               - ``bool``
               - ``False``
