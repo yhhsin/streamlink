@@ -962,6 +962,14 @@ def build_parser():
         """,
     )
     transport_hls.add_argument(
+        "--hls-playlist-no-new-segment-timeout-override",
+        type=num(float, ge=0),
+        metavar="TIMEOUT",
+        default=None,
+        help="""
+        """,
+    )
+    transport_hls.add_argument(
         "--hls-segment-ignore-names",
         metavar="NAMES",
         type=comma_list,
