@@ -242,6 +242,7 @@ class Streamlink:
             "hls-duration": None,
             "hls-playlist-reload-attempts": 3,
             "hls-playlist-reload-time": "default",
+            "hls-playlist-no-new-segment-timeout-override": None,
             "hls-segment-stream-data": False,
             "hls-segment-ignore-names": [],
             "hls-segment-key-uri": None,
