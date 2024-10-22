@@ -312,6 +312,13 @@ def build_parser():
         """,
     )
     general.add_argument(
+        "--rich_ui",
+        action="store_true",
+        help="""
+        Rich log and progress.
+        """,
+    )
+    general.add_argument(
         "-Q", "--quiet",
         action="store_true",
         help="""

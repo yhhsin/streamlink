@@ -183,6 +183,7 @@ def basicConfig(
     filename: Optional[Union[str, Path]] = None,
     filemode: str = "a",
     stream: Optional[IO] = None,
+    handler: Optional[logging.StreamHandler] = None,
     level: Optional[str] = None,
     format: str = FORMAT_BASE,  # noqa: A002  # TODO: rename to "fmt" (breaking)
     style: Literal["%", "{", "$"] = FORMAT_STYLE,
@@ -191,20 +192,20 @@ def basicConfig(
     capture_warnings: bool = False,
 ) -> logging.StreamHandler:
     with _config_lock:
-        handler: logging.StreamHandler
-        if filename is not None:
-            handler = logging.FileHandler(filename, filemode)
-        else:
-            handler = logging.StreamHandler(stream)
+        if handler is None:
+            if filename is not None:
+                handler = logging.FileHandler(filename, filemode)
+            else:
+                handler = logging.StreamHandler(stream)
 
-        # noinspection PyTypeChecker
-        formatter = StringFormatter(
-            format,
-            datefmt,
-            style=style,
-            remove_base=remove_base or REMOVE_BASE,
-        )
-        handler.setFormatter(formatter)
+            # noinspection PyTypeChecker
+            formatter = StringFormatter(
+                format,
+                datefmt,
+                style=style,
+                remove_base=remove_base or REMOVE_BASE,
+            )
+            handler.setFormatter(formatter)
 
         root.addHandler(handler)
         if level is not None:

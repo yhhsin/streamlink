@@ -13,6 +13,10 @@ from pathlib import Path
 from time import sleep
 from typing import Any, Dict, List, Optional, Type, Union
 
+import rich
+import rich.console
+import rich.logging
+import rich.theme
 import streamlink.logger as logger
 from streamlink import NoPluginError, PluginError, StreamError, Streamlink, __version__ as streamlink_version
 from streamlink.exceptions import FatalPluginError, StreamlinkDeprecationWarning
@@ -39,6 +43,7 @@ console: ConsoleOutput = None  # type: ignore[assignment]
 output: Union[FileOutput, PlayerOutput] = None  # type: ignore[assignment]
 stream_fd: StreamIO = None  # type: ignore[assignment]
 streamlink: Streamlink = None  # type: ignore[assignment]
+rich_console: rich.console.Console = None  # type: ignore[assignment]
 
 
 log = logging.getLogger("streamlink.cli")
@@ -324,7 +329,7 @@ def open_stream(stream):
     return stream_fd, prebuffer
 
 
-def output_stream(stream, formatter: Formatter):
+def output_stream(stream, formatter: Formatter, rich_progress=False):
     """Open stream, create output and finally write the stream to output."""
     global output
 
@@ -367,7 +372,7 @@ def output_stream(stream, formatter: Formatter):
                 )
             # TODO: finally clean up the global variable mess and refactor the streamlink_cli package
             # noinspection PyUnboundLocalVariable
-            stream_runner = StreamRunner(stream_fd, output, show_progress=show_progress)
+            stream_runner = StreamRunner(stream_fd, output, show_progress=show_progress, rich_console=rich_console)
             # noinspection PyUnboundLocalVariable
             stream_runner.run(prebuffer)
     except OSError as err:
@@ -827,7 +832,20 @@ def log_current_arguments(session: Streamlink, parser: argparse.ArgumentParser):
             log.debug(f" {name}={value if name not in sensitive else '*' * 8}")
 
 
-def setup_logger_and_console(stream=sys.stdout, filename=None, level="info", json=False):
+def setup_rich_console() -> rich.logging.Console:
+    theme = rich.theme.Theme({
+        "log.time": "green",
+        "logging.level.debug": "bright_green",
+        "logging.level.info": "bright_blue",
+        "logging.level.warning": "bright_yellow",
+        "logging.level.error": "bright_red",
+    })
+    return rich.logging.Console(
+        theme=theme,
+        color_system="truecolor",
+    )
+
+def setup_logger_and_console(stream=sys.stdout, filename=None, level="info", json=False, rich_ui=False):
     global console
 
     if filename == "-":
@@ -839,9 +857,20 @@ def setup_logger_and_console(stream=sys.stdout, filename=None, level="info", jso
         filename.parent.mkdir(parents=True, exist_ok=True)
 
     verbose = level in ("trace", "all")
+    handler = None
+    if rich_ui:
+        global rich_console
+        rich_console = setup_rich_console()
+        handler = rich.logging.RichHandler(
+            console=rich_console,
+            omit_repeated_times=False,
+            log_time_format=f"%H:%M:%S{'.%f' if verbose else ''}",
+        )
+        handler.stream = stream
     streamhandler = logger.basicConfig(
         stream=stream,
         filename=filename,
+        handler=handler,
         level=level,
         style="{",
         format=f"{'[{asctime}]' if verbose else ''}[{{name}}][{{levelname}}] {{message}}",
@@ -871,7 +900,7 @@ def main():
     silent_log = any(getattr(args, attr) for attr in QUIET_OPTIONS)
     log_level = args.loglevel if not silent_log else "none"
     log_file = args.logfile if log_level != "none" else None
-    setup_logger_and_console(console_out, log_file, log_level, args.json)
+    setup_logger_and_console(console_out, log_file, log_level, args.json, rich_ui=args.rich_ui)
 
     setup_streamlink()
     # load additional plugins

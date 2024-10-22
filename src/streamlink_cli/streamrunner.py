@@ -6,6 +6,8 @@ from pathlib import Path
 from threading import Event, Lock, Thread
 from typing import Optional
 
+import rich.console
+import rich.progress
 from streamlink.stream.stream import StreamIO
 from streamlink_cli.output import FileOutput, HTTPOutput, Output, PlayerOutput
 from streamlink_cli.utils.progress import Progress
@@ -73,12 +75,15 @@ class StreamRunner:
 
     playerpoller: Optional[PlayerPollThread] = None
     progress: Optional[Progress] = None
+    rich_progress: Optional[rich.progress.Progress] = None
+    rich_progress_task_id: Optional[int] = None
 
     def __init__(
         self,
         stream: StreamIO,
         output: Output,
         show_progress: bool = False,
+        rich_console: Optional[rich.console.Console] = None,
     ):
         self.stream = stream
         self.output = output
@@ -98,7 +103,21 @@ class StreamRunner:
                 filename = output.record.filename
 
         if filename and show_progress:
-            self.progress = Progress(sys.stderr, filename)
+            if rich_console is None:
+                self.progress = Progress(sys.stderr, filename)
+            else:
+                self.rich_progress = rich.progress.Progress(
+                    " ",
+                    rich.progress.SpinnerColumn(speed=1.0),
+                    rich.progress.TextColumn("[progress.description]{task.description}"),
+                    rich.progress.BarColumn(),
+                    rich.progress.TaskProgressColumn(),
+                    rich.progress.DownloadColumn(),
+                    rich.progress.TimeElapsedColumn(),
+
+                    console=rich_console,
+                )
+                self.rich_progress_task_id = self.rich_progress.add_task("Writing output", total=None)
 
     def run(
         self,
@@ -107,12 +126,15 @@ class StreamRunner:
     ) -> None:
         read = self.stream.read
         write = self.output.write
-        progress = self.progress.write if self.progress else _noop
+        progress = self.progress.write if self.progress else \
+            lambda buffer: self.rich_progress.advance(self.rich_progress_task_id, len(buffer)) if self.rich_progress else _noop
 
         if self.playerpoller:
             self.playerpoller.start()
         if self.progress:
             self.progress.start()
+        if self.rich_progress:
+            self.rich_progress.start()
 
         # TODO: Fix error messages (s/when/while/) and only log "Stream ended" when it ended on its own (data == b"").
         #       These are considered breaking changes of the CLI output, which is parsed by 3rd party tools.
@@ -151,6 +173,8 @@ class StreamRunner:
             if self.progress:
                 self.progress.close()
                 self.progress.join()
+            if self.rich_progress:
+                self.rich_progress.stop()
 
             self.stream.close()
             log.info("Stream ended")
