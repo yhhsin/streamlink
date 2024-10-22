@@ -6,6 +6,7 @@ import platform
 import re
 import signal
 import sys
+import threading
 import warnings
 from contextlib import closing, suppress
 from gettext import gettext
@@ -53,13 +54,33 @@ log = logging.getLogger("streamlink.cli")
 
 
 class StreamlinkRichStatus(RichStatus):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._lock = threading.RLock()
+        self._tasks = {}
+
+    def _acquire_task(self):
+        with self._lock:
+            task_id = next((task_id for task_id, occupied in self._tasks.items() if not occupied), None)
+            if task_id is None:
+                task_id = rich_progress.add_task(f"Thread {len(self._tasks) + 1}", start=False, total=None)
+                log.debug(f"Add task {task_id}, thread {threading.get_ident()}")
+            self._tasks[task_id] = True
+            return task_id
+
+    def _release_task(self, task_id):
+        with self._lock:
+            self._tasks[task_id] = False
+
     def new_segment(
         self,
         id: str,
         total: Optional = None,
     ) -> Optional[int]:
         if rich_progress:
-            task_id = rich_progress.add_task(f"Segment {id}", total=total)
+            task_id = self._acquire_task()
+            rich_progress.update(task_id, description=id)
+            rich_progress.start_task(task_id)
             return task_id
         else:
             return None
@@ -79,7 +100,8 @@ class StreamlinkRichStatus(RichStatus):
         handle: int,
     ):
         if rich_progress:
-            rich_progress.remove_task(handle)
+            rich_progress.reset(handle, start=False, total=None, description="")
+            self._release_task(handle)
 
 
 def get_formatter(plugin: Plugin):
@@ -742,11 +764,11 @@ def setup_plugins(extra_plugin_dir=None):
         load_plugins([Path(path).expanduser() for path in extra_plugin_dir])
 
 
-def setup_streamlink():
+def setup_streamlink(show_workers=False):
     """Creates the Streamlink session."""
     global streamlink
 
-    rich_status = StreamlinkRichStatus()
+    rich_status = StreamlinkRichStatus() if show_workers else None
     streamlink = Streamlink({"user-input-requester": ConsoleUserInputRequester(console)}, rich_status=rich_status)
 
 
@@ -936,7 +958,7 @@ def main():
     log_file = args.logfile if log_level != "none" else None
     setup_logger_and_console(console_out, log_file, log_level, args.json, rich_ui=args.rich_ui)
 
-    setup_streamlink()
+    setup_streamlink(show_workers=args.rich_ui_show_workers)
     # load additional plugins
     setup_plugins(args.plugin_dirs)
     setup_plugin_args(streamlink, parser)

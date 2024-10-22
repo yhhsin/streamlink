@@ -173,19 +173,26 @@ class HLSStreamWriter(SegmentedStreamWriter):
             self.queue(sequence, future, True)
 
         # regular segment request
-        if self.session.rich_status is not None:
-            handle = self.session.rich_status.new_segment(str(sequence.num))
-            sequence = Sequence(sequence[0], sequence[1], handle)
         future = self.executor.submit(self.fetch, sequence)
         self.queue(sequence, future, False)
 
     def fetch(self, sequence: Sequence) -> Optional[Response]:
         try:
-            return self._fetch(
+            if self.session.rich_status is not None:
+                handle = self.session.rich_status.new_segment(f"Fetching {sequence.num}")
+            r = self._fetch(
                 sequence.segment.uri,
                 stream=self.stream_data,
                 **self.create_request_params(sequence.num, sequence.segment, False),
             )
+            if self.session.rich_status is not None and handle is not None:
+                if False:
+                    size = len(r.content)
+                    self.session.rich_status.update_segment(handle, total=size, completed=size)
+                    r.rich_progress_handle = handle
+                else:
+                    self.session.rich_status.remove_segment(handle)
+            return r
         except StreamError as err:
             log.error(f"Failed to fetch segment {sequence.num}: {err}")
 
@@ -227,8 +234,8 @@ class HLSStreamWriter(SegmentedStreamWriter):
                 for meta_stream in self.meta_streams:
                     meta_stream.segment_end(sequence.segment.uri)
 
-                if self.session.rich_status is not None and sequence.rich_progress_handle is not None:
-                    self.session.rich_status.remove_segment(sequence.rich_progress_handle)
+                if self.session.rich_status is not None and getattr(result, "rich_progress_handle", None) is not None:
+                    self.session.rich_status.remove_segment(result.rich_progress_handle)
 
                 is_paused = self.reader.is_paused()
 
@@ -251,8 +258,8 @@ class HLSStreamWriter(SegmentedStreamWriter):
             # Unread data in the HTTPResponse connection blocks the connection from being released back to the pool.
             result.raw.drain_conn()
 
-            if self.session.rich_status is not None and sequence.rich_progress_handle is not None:
-                self.session.rich_status.remove_segment(sequence.rich_progress_handle)
+            if self.session.rich_status is not None and getattr(result, "rich_progress_handle", None) is not None:
+                self.session.rich_status.remove_segment(result.rich_progress_handle)
 
             # block reader thread if filtering out segments
             if not self.reader.is_paused():

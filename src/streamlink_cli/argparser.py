@@ -319,6 +319,13 @@ def build_parser():
         """,
     )
     general.add_argument(
+        "--rich_ui_show_workers",
+        action="store_true",
+        help="""
+        Show workers.
+        """,
+    )
+    general.add_argument(
         "-Q", "--quiet",
         action="store_true",
         help="""
