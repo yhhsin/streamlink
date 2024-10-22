@@ -61,7 +61,7 @@ class StreamlinkRichStatus(RichStatus):
 
     def _acquire_task(self):
         with self._lock:
-            task_id = next((task_id for task_id, occupied in self._tasks.items() if not occupied), None)
+            task_id, _ = next(filter(lambda t: not t[1], self._tasks.items()), (None, None))
             if task_id is None:
                 task_id = rich_progress.add_task(f"Thread {len(self._tasks) + 1}", start=False, total=None)
                 log.debug(f"Add task {task_id}, thread {threading.get_ident()}")
