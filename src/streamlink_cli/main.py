@@ -16,12 +16,14 @@ from typing import Any, Dict, List, Optional, Type, Union
 import rich
 import rich.console
 import rich.logging
+import rich.progress
 import rich.theme
 import streamlink.logger as logger
 from streamlink import NoPluginError, PluginError, StreamError, Streamlink, __version__ as streamlink_version
 from streamlink.exceptions import FatalPluginError, StreamlinkDeprecationWarning
 from streamlink.options import Options
 from streamlink.plugin import Plugin
+from streamlink.status import RichStatus
 from streamlink.stream.stream import Stream, StreamIO
 from streamlink.utils.named_pipe import NamedPipe
 from streamlink.utils.times import LOCAL as LOCALTIMEZONE
@@ -44,9 +46,40 @@ output: Union[FileOutput, PlayerOutput] = None  # type: ignore[assignment]
 stream_fd: StreamIO = None  # type: ignore[assignment]
 streamlink: Streamlink = None  # type: ignore[assignment]
 rich_console: rich.console.Console = None  # type: ignore[assignment]
+rich_progress: rich.progress.Progress = None  # type: ignore[assignment]
 
 
 log = logging.getLogger("streamlink.cli")
+
+
+class StreamlinkRichStatus(RichStatus):
+    def new_segment(
+        self,
+        id: str,
+        total: Optional = None,
+    ) -> Optional[int]:
+        if rich_progress:
+            task_id = rich_progress.add_task(f"Segment {id}", total=total)
+            return task_id
+        else:
+            return None
+
+    def update_segment(
+        self,
+        handle: int,
+        total: Optional = None,
+        completed: Optional = None,
+        advance: Optional = None,
+    ):
+        if rich_progress:
+            rich_progress.update(handle, total=total, completed=completed, advance=advance)
+
+    def remove_segment(
+        self,
+        handle: int,
+    ):
+        if rich_progress:
+            rich_progress.remove_task(handle)
 
 
 def get_formatter(plugin: Plugin):
@@ -713,7 +746,8 @@ def setup_streamlink():
     """Creates the Streamlink session."""
     global streamlink
 
-    streamlink = Streamlink({"user-input-requester": ConsoleUserInputRequester(console)})
+    rich_status = StreamlinkRichStatus()
+    streamlink = Streamlink({"user-input-requester": ConsoleUserInputRequester(console)}, rich_status=rich_status)
 
 
 def setup_plugin_args(session: Streamlink, parser: ArgumentParser):

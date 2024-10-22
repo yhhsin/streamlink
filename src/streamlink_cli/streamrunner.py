@@ -9,6 +9,7 @@ from typing import Optional
 import rich.console
 import rich.progress
 from streamlink.stream.stream import StreamIO
+import streamlink_cli.main
 from streamlink_cli.output import FileOutput, HTTPOutput, Output, PlayerOutput
 from streamlink_cli.utils.progress import Progress
 
@@ -117,6 +118,7 @@ class StreamRunner:
 
                     console=rich_console,
                 )
+                streamlink_cli.main.rich_progress = self.rich_progress
                 self.rich_progress_task_id = self.rich_progress.add_task("Writing output", total=None)
 
     def run(

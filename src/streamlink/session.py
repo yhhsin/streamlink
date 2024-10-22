@@ -14,6 +14,7 @@ from streamlink.logger import StreamlinkLogger
 from streamlink.options import Options
 from streamlink.plugin.api.http_session import HTTPSession, TLSNoDHAdapter
 from streamlink.plugin.plugin import NO_PRIORITY, Matcher, Plugin
+from streamlink.status import RichStatus
 from streamlink.utils.l10n import Localization
 from streamlink.utils.module import load_module
 from streamlink.utils.url import update_scheme
@@ -214,9 +215,12 @@ class Streamlink:
     with additional getter/setter mappings for special options.
     """
 
+    rich_status: RichStatus
+
     def __init__(
         self,
         options: Optional[Dict[str, Any]] = None,
+        rich_status: Optional[RichStatus] = None,
     ):
         """
         :param options: Custom options
@@ -269,6 +273,7 @@ class Streamlink:
             self.options.update(options)
         self.plugins: Dict[str, Type[Plugin]] = {}
         self.load_builtin_plugins()
+        self.rich_status = rich_status
 
     def set_option(self, key: str, value: Any) -> None:
         """

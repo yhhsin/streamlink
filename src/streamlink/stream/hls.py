@@ -29,6 +29,7 @@ log = logging.getLogger(__name__)
 class Sequence(NamedTuple):
     num: int
     segment: Segment
+    rich_progress_handle: int
 
 
 class ByteRangeOffset:
@@ -172,6 +173,9 @@ class HLSStreamWriter(SegmentedStreamWriter):
             self.queue(sequence, future, True)
 
         # regular segment request
+        if self.session.rich_status is not None:
+            handle = self.session.rich_status.new_segment(str(sequence.num))
+            sequence = Sequence(sequence[0], sequence[1], handle)
         future = self.executor.submit(self.fetch, sequence)
         self.queue(sequence, future, False)
 
@@ -223,6 +227,9 @@ class HLSStreamWriter(SegmentedStreamWriter):
                 for meta_stream in self.meta_streams:
                     meta_stream.segment_end(sequence.segment.uri)
 
+                if self.session.rich_status is not None and sequence.rich_progress_handle is not None:
+                    self.session.rich_status.remove_segment(sequence.rich_progress_handle)
+
                 is_paused = self.reader.is_paused()
 
                 # Depending on the filtering implementation, the segment's discontinuity attribute can be missing.
@@ -244,15 +251,20 @@ class HLSStreamWriter(SegmentedStreamWriter):
             # Unread data in the HTTPResponse connection blocks the connection from being released back to the pool.
             result.raw.drain_conn()
 
+            if self.session.rich_status is not None and sequence.rich_progress_handle is not None:
+                self.session.rich_status.remove_segment(sequence.rich_progress_handle)
+
             # block reader thread if filtering out segments
             if not self.reader.is_paused():
                 log.info("Filtering out segments and pausing stream output")
                 self.reader.pause()
 
-    def _write_chunk(self, chunk):
+    def _write_chunk(self, chunk, handle = None):
         self.reader.buffer.write(chunk)
         for meta_stream in self.meta_streams:
             meta_stream.write(chunk)
+        if self.session.rich_status is not None and handle is not None:
+            self.session.rich_status.update_segment(handle, advance=len(chunk))
 
     def _write(self, sequence: Sequence, result: Response, is_map: bool):
         if sequence.segment.key and sequence.segment.key.method != "NONE":
@@ -361,7 +373,7 @@ class HLSStreamWorker(SegmentedStreamWorker):
             raise StreamError("Streams containing I-frames only are not playable")
 
         media_sequence = playlist.media_sequence or 0
-        sequences = [Sequence(media_sequence + i, s)
+        sequences = [Sequence(media_sequence + i, s, None)
                      for i, s in enumerate(playlist.segments)]
 
         self.playlist_targetduration = playlist.targetduration or 0
