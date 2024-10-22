@@ -57,20 +57,20 @@ class StreamlinkRichStatus(RichStatus):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._lock = threading.RLock()
-        self._tasks = {}
+        self._available_tasks = []
 
     def _acquire_task(self):
         with self._lock:
-            task_id, _ = next(filter(lambda t: not t[1], self._tasks.items()), (None, None))
-            if task_id is None:
-                task_id = rich_progress.add_task(f"Thread {len(self._tasks) + 1}", start=False, total=None)
+            try:
+                task_id = self._available_tasks.pop()
+            except:
+                task_id = rich_progress.add_task("", start=False, total=None)
                 log.debug(f"Add task {task_id}, thread {threading.get_ident()}")
-            self._tasks[task_id] = True
             return task_id
 
     def _release_task(self, task_id):
         with self._lock:
-            self._tasks[task_id] = False
+            self._available_tasks.append(task_id)
 
     def new_segment(
         self,
