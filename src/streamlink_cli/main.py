@@ -79,7 +79,7 @@ class StreamlinkRichStatus(RichStatus):
     ) -> Optional[int]:
         if rich_progress:
             task_id = self._acquire_task()
-            rich_progress.update(task_id, description=id)
+            rich_progress.reset(task_id, start=False, total=None, description=id)
             rich_progress.start_task(task_id)
             return task_id
         else:
@@ -100,7 +100,7 @@ class StreamlinkRichStatus(RichStatus):
         handle: int,
     ):
         if rich_progress:
-            rich_progress.reset(handle, start=False, total=None, description="")
+            rich_progress.stop_task(handle)
             self._release_task(handle)
 
 

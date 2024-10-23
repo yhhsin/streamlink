@@ -191,6 +191,8 @@ class HLSStreamWriter(SegmentedStreamWriter):
                     self.session.rich_status.update_segment(handle, total=size, completed=size)
                     r.rich_progress_handle = handle
                 else:
+                    size = len(r.content)
+                    self.session.rich_status.update_segment(handle, total=size, completed=size)
                     self.session.rich_status.remove_segment(handle)
             return r
         except StreamError as err:
