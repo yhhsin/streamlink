@@ -93,9 +93,15 @@ class LineToday(Plugin):
             if broadcast_status != self.BROADCAST_STATUS:
                 log.info("This stream is currently offline")
                 return
-            streams = {
-                f"{label}p" if label.isdigit() else label: HLSStream(self.session, url) for label, url in hls_urls.items()
-            }
+            if len(hls_urls) == 1 and "abr" in hls_urls:
+                streams = HLSStream.parse_variant_playlist(
+                    self.session,
+                    hls_urls["abr"],
+                )
+            else:
+                streams = {
+                    f"{label}p" if label.isdigit() else label: HLSStream(self.session, url) for label, url in hls_urls.items()
+                }
         else:
             log.info(f"Unknown media type: {media[0]}")
             return
