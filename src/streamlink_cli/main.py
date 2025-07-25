@@ -888,7 +888,7 @@ def log_current_arguments(session: Streamlink, parser: argparse.ArgumentParser):
             log.debug(f" {name}={value if name not in sensitive else '*' * 8}")
 
 
-def setup_rich_console() -> rich.logging.Console:
+def setup_rich_console() -> rich.console.Console:
     theme = rich.theme.Theme({
         "log.time": "green",
         "logging.level.debug": "bright_green",
@@ -896,7 +896,8 @@ def setup_rich_console() -> rich.logging.Console:
         "logging.level.warning": "bright_yellow",
         "logging.level.error": "bright_red",
     })
-    return rich.logging.Console(
+    rich.console.ConsoleOptions.ascii_only = property(lambda self: True)
+    return rich.console.Console(
         theme=theme,
         color_system="truecolor",
     )
